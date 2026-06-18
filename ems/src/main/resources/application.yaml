@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: ${APPLICATION_NAME:ems-spanner}
+
+  datasource:
+    url: ${DATABASE_URL:jdbc:cloudspanner:/projects/prefab-lamp-498812-u8/instances/ems-instance/databases/ems-db}
+    driver-class-name: com.google.cloud.spanner.jdbc.JdbcDriver
+    jpa:
+      hibernate:
+        ddl-auto: none   # Spanner doesn’t support Hibernate schema auto-generation
+      show-sql: true
+      database-platform: org.hibernate.dialect.SpannerDialect
+
+  cloud:
+    discovery:
+      enabled: false
+spanner:
+  project-id: ${SPANNER_PROJECT_ID:prefab-lamp-498812-u8}
+  instance-id: ${SPANNER_INSTANCE_ID:ems-instance}
+  database: ${SPANNER_DATABASE:ems-db}
+
+jwt:
+  secret: ${SECRET:emsBackendApplicationJwtSecretKeySecure256Bits2026}
+  expiration: ${EXPIRATION:86400000}
+
+server:
+  port: ${PORT:8080}
+  servlet:
+    context-path: ${SERVICE_NAME:/employee-service}
+
+eureka:
+  client:
+    enabled: false
+    service-url:
+      register-with-eureka: false
+      fetch-registry: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
