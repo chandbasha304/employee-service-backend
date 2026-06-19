@@ -245,18 +245,24 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         validateBulkRequest(employeeDtos);
 
+        // Fetch departments once in batch
+        Set<Long> deptIds = employeeDtos.stream()
+                .map(EmployeeRequestDto::getDepartmentId)
+                .collect(Collectors.toSet());
+        List<Department> departments = departmentRepository.findAllById(deptIds);
+        Map<Long, Department> departmentMap = departments.stream()
+                .collect(Collectors.toMap(Department::getId, Function.identity()));
+
         List<Employee> employees = new ArrayList<>();
 
         for (EmployeeRequestDto dto : employeeDtos) {
 
-            Department department =
-                    departmentRepository.findById(dto.getDepartmentId())
-                            .orElseThrow(() ->
-                                    new ResourceNotFoundException(
-                                            "Department not found for id: "
-                                                    + dto.getDepartmentId()
-                                    )
-                            );
+            Department department = departmentMap.get(dto.getDepartmentId());
+            if (department == null) {
+                throw new ResourceNotFoundException(
+                        "Department not found for id: " + dto.getDepartmentId()
+                );
+            }
 
             String employeeCode =
                     generateEmployeeCode();
@@ -293,6 +299,9 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         Set<String> emails = new HashSet<>();
         Set<String> phones = new HashSet<>();
+        List<String> emailsToQuery = new ArrayList<>();
+        List<String> phonesToQuery = new ArrayList<>();
+        Set<Long> deptIds = new HashSet<>();
 
         for (EmployeeRequestDto dto : employeeDtos) {
 
@@ -316,10 +325,48 @@ public class EmployeeServiceImpl implements EmployeeService {
                 );
             }
 
+            if (dto.getEmail() != null) {
+                emailsToQuery.add(dto.getEmail());
+            }
+            if (dto.getPhone() != null) {
+                phonesToQuery.add(dto.getPhone());
+            }
+            if (dto.getDepartmentId() != null) {
+                deptIds.add(dto.getDepartmentId());
+            }
+        }
+
+        // Batch fetch existing emails from DB
+        Set<String> dbEmails = new HashSet<>();
+        if (!emailsToQuery.isEmpty()) {
+            List<Employee> existingEmails = employeeRepository.findByEmailIn(emailsToQuery);
+            for (Employee emp : existingEmails) {
+                dbEmails.add(emp.getEmail().toLowerCase());
+            }
+        }
+
+        // Batch fetch existing phones from DB
+        Set<String> dbPhones = new HashSet<>();
+        if (!phonesToQuery.isEmpty()) {
+            List<Employee> existingPhones = employeeRepository.findByPhoneIn(phonesToQuery);
+            for (Employee emp : existingPhones) {
+                dbPhones.add(emp.getPhone());
+            }
+        }
+
+        // Batch fetch departments from DB
+        Set<Long> dbDeptIds = new HashSet<>();
+        if (!deptIds.isEmpty()) {
+            List<Department> departments = departmentRepository.findAllById(deptIds);
+            for (Department dept : departments) {
+                dbDeptIds.add(dept.getId());
+            }
+        }
+
+        for (EmployeeRequestDto dto : employeeDtos) {
+
             // email exists in database
-            if (employeeRepository.existsByEmail(
-                    dto.getEmail()
-            )) {
+            if (dto.getEmail() != null && dbEmails.contains(dto.getEmail().toLowerCase())) {
 
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
@@ -329,9 +376,7 @@ public class EmployeeServiceImpl implements EmployeeService {
             }
 
             // phone exists in database
-            if (employeeRepository.existsByPhone(
-                    dto.getPhone()
-            )) {
+            if (dto.getPhone() != null && dbPhones.contains(dto.getPhone())) {
 
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
@@ -341,9 +386,7 @@ public class EmployeeServiceImpl implements EmployeeService {
             }
 
             // department validation
-            if (!departmentRepository.existsById(
-                    dto.getDepartmentId()
-            )) {
+            if (dto.getDepartmentId() == null || !dbDeptIds.contains(dto.getDepartmentId())) {
 
                 throw new ResourceNotFoundException(
                         "Department not found for id: "
@@ -384,6 +427,8 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         Set<Long> ids = new HashSet<>();
         Set<String> requestEmails = new HashSet<>();
+        Set<Long> deptIds = new HashSet<>();
+        List<String> emailsToQuery = new ArrayList<>();
 
         for (EmployeeBulkUpdateDto dto : requests) {
 
@@ -395,6 +440,13 @@ public class EmployeeServiceImpl implements EmployeeService {
             if (!requestEmails.add(dto.getEmail().toLowerCase())) {
                 validationErrors.add(
                         "Duplicate email found in request: " + dto.getEmail());
+            }
+
+            if (dto.getDepartmentId() != null) {
+                deptIds.add(dto.getDepartmentId());
+            }
+            if (dto.getEmail() != null) {
+                emailsToQuery.add(dto.getEmail());
             }
         }
 
@@ -414,6 +466,23 @@ public class EmployeeServiceImpl implements EmployeeService {
             }
         }
 
+        // Batch fetch departments to avoid existsById queries in a loop
+        Map<Long, Department> departmentMap = new HashMap<>();
+        if (!deptIds.isEmpty()) {
+            List<Department> departments = departmentRepository.findAllById(deptIds);
+            departmentMap = departments.stream()
+                    .collect(Collectors.toMap(Department::getId, Function.identity()));
+        }
+
+        // Batch fetch employees by email to avoid findByEmail queries in a loop
+        Map<String, Employee> emailEmployeeMap = new HashMap<>();
+        if (!emailsToQuery.isEmpty()) {
+            List<Employee> existingEmployeesWithEmails = employeeRepository.findByEmailIn(emailsToQuery);
+            for (Employee emp : existingEmployeesWithEmails) {
+                emailEmployeeMap.put(emp.getEmail().toLowerCase(), emp);
+            }
+        }
+
         for (EmployeeBulkUpdateDto dto : requests) {
 
             Employee existing = employeeMap.get(dto.getId());
@@ -422,11 +491,9 @@ public class EmployeeServiceImpl implements EmployeeService {
                 continue;
             }
 
-            Optional<Employee> employeeByEmail =
-                    employeeRepository.findByEmail(dto.getEmail());
+            Employee employeeByEmail = emailEmployeeMap.get(dto.getEmail().toLowerCase());
 
-            if (employeeByEmail.isPresent()
-                    && !employeeByEmail.get().getId().equals(dto.getId())) {
+            if (employeeByEmail != null && !employeeByEmail.getId().equals(dto.getId())) {
 
                 validationErrors.add(
                         "Employee ID " + dto.getId()
@@ -434,7 +501,7 @@ public class EmployeeServiceImpl implements EmployeeService {
                                 + "' is already assigned to another employee");
             }
 
-            if (!departmentRepository.existsById(dto.getDepartmentId())) {
+            if (dto.getDepartmentId() == null || !departmentMap.containsKey(dto.getDepartmentId())) {
 
                 validationErrors.add(
                         "Employee ID " + dto.getId()
@@ -453,10 +520,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         for (EmployeeBulkUpdateDto dto : requests) {
 
             Employee existing = employeeMap.get(dto.getId());
-
-            Department department =
-                    departmentRepository.findById(dto.getDepartmentId())
-                            .orElseThrow();
+            Department department = departmentMap.get(dto.getDepartmentId());
 
             existing.setFirstName(dto.getFirstName());
             existing.setLastName(dto.getLastName());

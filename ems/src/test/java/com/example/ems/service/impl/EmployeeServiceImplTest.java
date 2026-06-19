@@ -245,10 +245,9 @@ class EmployeeServiceImplTest {
     @Test
     void bulkCreateEmployees_Success() {
         List<EmployeeRequestDto> dtos = Collections.singletonList(employeeRequestDto);
-        when(departmentRepository.existsById(1L)).thenReturn(true);
-        when(departmentRepository.findById(1L)).thenReturn(Optional.of(department));
-        when(employeeRepository.existsByEmail(employeeRequestDto.getEmail())).thenReturn(false);
-        when(employeeRepository.existsByPhone(employeeRequestDto.getPhone())).thenReturn(false);
+        when(departmentRepository.findAllById(any())).thenReturn(Collections.singletonList(department));
+        when(employeeRepository.findByEmailIn(any())).thenReturn(Collections.emptyList());
+        when(employeeRepository.findByPhoneIn(any())).thenReturn(Collections.emptyList());
         when(employeeRepository.findByEmployeeCode(anyString())).thenReturn(Optional.empty());
         when(employeeRepository.saveAll(anyList())).thenReturn(Collections.singletonList(employee));
 
@@ -266,10 +265,6 @@ class EmployeeServiceImplTest {
         dto2.setDepartmentId(1L);
         List<EmployeeRequestDto> dtos = Arrays.asList(employeeRequestDto, dto2);
 
-        when(employeeRepository.existsByEmail(employeeRequestDto.getEmail())).thenReturn(false);
-        when(employeeRepository.existsByPhone(employeeRequestDto.getPhone())).thenReturn(false);
-        when(departmentRepository.existsById(1L)).thenReturn(true);
-
         ResponseStatusException exception = assertThrows(ResponseStatusException.class, () ->
                 employeeService.bulkCreateEmployees(dtos));
 
@@ -285,10 +280,6 @@ class EmployeeServiceImplTest {
         dto2.setDepartmentId(1L);
         List<EmployeeRequestDto> dtos = Arrays.asList(employeeRequestDto, dto2);
 
-        when(employeeRepository.existsByEmail(employeeRequestDto.getEmail())).thenReturn(false);
-        when(employeeRepository.existsByPhone(employeeRequestDto.getPhone())).thenReturn(false);
-        when(departmentRepository.existsById(1L)).thenReturn(true);
-
         ResponseStatusException exception = assertThrows(ResponseStatusException.class, () ->
                 employeeService.bulkCreateEmployees(dtos));
 
@@ -299,7 +290,9 @@ class EmployeeServiceImplTest {
     @Test
     void bulkCreateEmployees_Conflict_EmailExistsInDb() {
         List<EmployeeRequestDto> dtos = Collections.singletonList(employeeRequestDto);
-        when(employeeRepository.existsByEmail(employeeRequestDto.getEmail())).thenReturn(true);
+        when(employeeRepository.findByEmailIn(any())).thenReturn(Collections.singletonList(employee));
+        when(employeeRepository.findByPhoneIn(any())).thenReturn(Collections.emptyList());
+        when(departmentRepository.findAllById(any())).thenReturn(Collections.singletonList(department));
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class, () ->
                 employeeService.bulkCreateEmployees(dtos));
@@ -311,9 +304,9 @@ class EmployeeServiceImplTest {
     @Test
     void bulkCreateEmployees_NotFound_Department() {
         List<EmployeeRequestDto> dtos = Collections.singletonList(employeeRequestDto);
-        when(employeeRepository.existsByEmail(employeeRequestDto.getEmail())).thenReturn(false);
-        when(employeeRepository.existsByPhone(employeeRequestDto.getPhone())).thenReturn(false);
-        when(departmentRepository.existsById(1L)).thenReturn(false);
+        when(employeeRepository.findByEmailIn(any())).thenReturn(Collections.emptyList());
+        when(employeeRepository.findByPhoneIn(any())).thenReturn(Collections.emptyList());
+        when(departmentRepository.findAllById(any())).thenReturn(Collections.emptyList());
 
         ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () ->
                 employeeService.bulkCreateEmployees(dtos));
@@ -337,10 +330,9 @@ class EmployeeServiceImplTest {
 
         List<EmployeeBulkUpdateDto> requests = Collections.singletonList(updateDto);
 
-        when(employeeRepository.findAllById(anySet())).thenReturn(Collections.singletonList(employee));
-        when(employeeRepository.findByEmail("john.new@example.com")).thenReturn(Optional.empty());
-        when(departmentRepository.existsById(1L)).thenReturn(true);
-        when(departmentRepository.findById(1L)).thenReturn(Optional.of(department));
+        when(employeeRepository.findAllById(any())).thenReturn(Collections.singletonList(employee));
+        when(employeeRepository.findByEmailIn(any())).thenReturn(Collections.emptyList());
+        when(departmentRepository.findAllById(any())).thenReturn(Collections.singletonList(department));
         when(employeeRepository.saveAll(anyList())).thenReturn(Collections.singletonList(employee));
 
         List<EmployeeResponseDto> responses = employeeService.bulkUpdateEmployees(requests);
@@ -391,9 +383,9 @@ class EmployeeServiceImplTest {
 
         List<EmployeeBulkUpdateDto> requests = Collections.singletonList(updateDto);
 
-        when(employeeRepository.findAllById(anySet())).thenReturn(Collections.singletonList(employee));
-        when(employeeRepository.findByEmail("other@example.com")).thenReturn(Optional.of(otherEmployee));
-        when(departmentRepository.existsById(1L)).thenReturn(true);
+        when(employeeRepository.findAllById(any())).thenReturn(Collections.singletonList(employee));
+        when(employeeRepository.findByEmailIn(any())).thenReturn(Collections.singletonList(otherEmployee));
+        when(departmentRepository.findAllById(any())).thenReturn(Collections.singletonList(department));
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class, () ->
                 employeeService.bulkUpdateEmployees(requests));

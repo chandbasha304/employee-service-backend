@@ -18,6 +18,12 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     // Find employee by email
     Optional<Employee> findByEmail(String email);
 
+    // Batch find employees by email list
+    List<Employee> findByEmailIn(List<String> emails);
+
+    // Batch find employees by phone list
+    List<Employee> findByPhoneIn(List<String> phones);
+
     Optional<Employee> findByEmployeeCode(
             String employeeCode
     );
