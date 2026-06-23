@@ -9,7 +9,7 @@ steps:
     args:
       - 'build'
       - '-t'
-      - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:$BRANCH_NAME'
+      - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:$SHORT_SHA'
       - '-t'
       - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:latest'
       - '-f'
@@ -18,7 +18,7 @@ steps:
 
   # 3. Push Docker Images to Google Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:$BRANCH_NAME']
+    args: ['push', 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:$SHORT_SHA']
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:latest']
 
@@ -33,7 +33,7 @@ steps:
           --command="cd ~/ems-deployment && docker-compose pull && docker-compose down && docker-compose up -d"
 
 images:
-  - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:$BRANCH_NAME'
+  - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:$SHORT_SHA'
   - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:latest'
 
 options:
