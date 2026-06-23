@@ -1,0 +1,37 @@
+steps:
+  # 1. Build and package the Spring Boot JAR
+  - name: 'gcr.io/cloud-builders/mvn'
+    args: ['clean', 'package', '-DskipTests']
+    dir: 'ems'
+
+  # 2. Build Docker Image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:$BRANCH_NAME'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:latest'
+      - '-f'
+      - 'ems/Dockerfile'
+      - 'ems'
+
+  # 3. Push Docker Images to Google Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:$BRANCH_NAME']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:latest']
+
+  # 4. Trigger Remote SSH Deployment on VM
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        gcloud compute ssh bashasoft304@ems-backend-vm \
+          --zone=us-central1-a \
+          --command="cd ~/ems-deployment && docker-compose pull && docker-compose down && docker-compose up -d"
+
+images:
+  - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:$BRANCH_NAME'
+  - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:latest'

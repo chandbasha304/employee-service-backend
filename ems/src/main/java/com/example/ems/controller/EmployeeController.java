@@ -222,6 +222,13 @@ public class EmployeeController {
         return ResponseEntity.ok(list);
     }
 
+    @DeleteMapping("/presence")
+    public ResponseEntity<?> removePresence() throws Exception {
+        String email = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getName();
+        firestore.collection("presence").document(email).delete().get();
+        return ResponseEntity.ok(Map.of("message", "Presence cleared successfully"));
+    }
+
     @PostMapping("/locks/{id}")
     public ResponseEntity<?> acquireLock(@PathVariable Long id) throws Exception {
         String email = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getName();
