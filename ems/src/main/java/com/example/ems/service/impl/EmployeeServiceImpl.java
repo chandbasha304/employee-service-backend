@@ -10,7 +10,9 @@ import com.example.ems.exception.ResourceNotFoundException;
 import com.example.ems.repository.DepartmentRepository;
 import com.example.ems.repository.EmployeeRepository;
 import com.example.ems.service.EmployeeService;
+import com.example.ems.pubsub.EmployeeEventPublisher;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -27,18 +29,24 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class EmployeeServiceImpl implements EmployeeService {
 
     private final EmployeeRepository employeeRepository;
 
     private final DepartmentRepository departmentRepository;
 
+    private final EmployeeEventPublisher employeeEventPublisher;
+
     @Override
     public EmployeeResponseDto createEmployee(
             EmployeeRequestDto dto
     ) {
+        log.info("[START] EmployeeServiceImpl.createEmployee - email: {}", dto.getEmail());
+        long start = System.currentTimeMillis();
 
         if (employeeRepository.existsByEmail(dto.getEmail())) {
+            log.warn("createEmployee failed - email already exists: {}", dto.getEmail());
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     dto.getEmail() + " already exists"
@@ -47,19 +55,22 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         Department department = departmentRepository
                 .findById(dto.getDepartmentId())
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
+                .orElseThrow(() -> {
+                        log.warn("createEmployee failed - department not found: {}", dto.getDepartmentId());
+                        return new ResourceNotFoundException(
                                 "Department not found"
-                        )
-                );
+                        );
+                });
 
 
 
 
 
 
+        long id = System.currentTimeMillis() + new Random().nextInt(100000);
         String employeeCode = String.format("EMP%s",new Random().nextInt(9000));
         Employee employee = Employee.builder()
+                .id(id)
                 .employeeCode(employeeCode)
                 .firstName(dto.getFirstName())
                 .lastName(dto.getLastName())
@@ -73,21 +84,28 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .build();
 
         Employee savedEmployee = employeeRepository.save(employee);
-
-        return mapToDto(savedEmployee);
+        employeeEventPublisher.publishEmployeeEvent(savedEmployee.getId(), "CREATE");
+        EmployeeResponseDto response = mapToDto(savedEmployee);
+        log.info("[END] EmployeeServiceImpl.createEmployee - saved ID: {} in {}ms", savedEmployee.getId(), System.currentTimeMillis() - start);
+        return response;
     }
 
     @Override
     public EmployeeResponseDto getEmployeeById(Long id) {
+        log.info("[START] EmployeeServiceImpl.getEmployeeById - id: {}", id);
+        long start = System.currentTimeMillis();
 
         Employee employee = employeeRepository.findById(id)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
+                .orElseThrow(() -> {
+                        log.warn("getEmployeeById failed - employee not found: {}", id);
+                        return new ResourceNotFoundException(
                                 "Employee not found"
-                        )
-                );
+                        );
+                });
 
-        return mapToDto(employee);
+        EmployeeResponseDto response = mapToDto(employee);
+        log.info("[END] EmployeeServiceImpl.getEmployeeById - finished in {}ms", System.currentTimeMillis() - start);
+        return response;
     }
 
     @Override
@@ -95,6 +113,8 @@ public class EmployeeServiceImpl implements EmployeeService {
             int page,
             int size
     ) {
+        log.info("[START] EmployeeServiceImpl.getAllEmployees - page: {}, size: {}", page, size);
+        long start = System.currentTimeMillis();
 
         Pageable pageable =
                 PageRequest.of(page, size);
@@ -102,22 +122,33 @@ public class EmployeeServiceImpl implements EmployeeService {
         Page<Employee> employees =
                 employeeRepository.findAll(pageable);
 
-        return employees.map(this::mapToDto);
+        Page<EmployeeResponseDto> response = employees.map(this::mapToDto);
+        log.info("[END] EmployeeServiceImpl.getAllEmployees - retrieved count: {} in {}ms", response.getNumberOfElements(), System.currentTimeMillis() - start);
+        return response;
     }
 
     @Override
     public EmployeeResponseDto updateEmployee(Long id, EmployeeRequestDto dto) {
+        log.info("[START] EmployeeServiceImpl.updateEmployee - id: {}, email: {}", id, dto.getEmail());
+        long start = System.currentTimeMillis();
         Employee employee = employeeRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
+                .orElseThrow(() -> {
+                    log.warn("updateEmployee failed - employee not found: {}", id);
+                    return new ResourceNotFoundException("Employee not found");
+                });
 
         // Email uniqueness check
         if (employeeRepository.existsByEmail(dto.getEmail()) &&
                 !employee.getEmail().equals(dto.getEmail())) {
+            log.warn("updateEmployee failed - email already in use: {}", dto.getEmail());
             throw new ResponseStatusException(HttpStatus.CONFLICT,"Email already in use");
         }
 
         Department department = departmentRepository.findById(dto.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Department not found"));
+                .orElseThrow(() -> {
+                    log.warn("updateEmployee failed - department not found: {}", dto.getDepartmentId());
+                    return new ResourceNotFoundException("Department not found");
+                });
 
         employee.setFirstName(dto.getFirstName());
         employee.setLastName(dto.getLastName());
@@ -128,7 +159,10 @@ public class EmployeeServiceImpl implements EmployeeService {
         employee.setDepartment(department);
 
         Employee updated = employeeRepository.save(employee);
-        return mapToDto(updated);
+        employeeEventPublisher.publishEmployeeEvent(updated.getId(), "UPDATE");
+        EmployeeResponseDto response = mapToDto(updated);
+        log.info("[END] EmployeeServiceImpl.updateEmployee - updated ID: {} in {}ms", updated.getId(), System.currentTimeMillis() - start);
+        return response;
     }
 
 
@@ -149,18 +183,31 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     @Override
     public void deleteEmployee(Long id) {
+        log.info("[START] EmployeeServiceImpl.deleteEmployee - id: {}", id);
+        long start = System.currentTimeMillis();
         Employee employee = employeeRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
+                .orElseThrow(() -> {
+                    log.warn("deleteEmployee failed - employee not found: {}", id);
+                    return new ResourceNotFoundException("Employee not found");
+                });
         employeeRepository.delete(employee);
+        employeeEventPublisher.publishEmployeeEvent(id, "DELETE");
+        log.info("[END] EmployeeServiceImpl.deleteEmployee - finished in {}ms", System.currentTimeMillis() - start);
     }
 
     @Override
     public List<String> findDistinctDesignations() {
-        return employeeRepository.findDistinctDesignations();
+        log.info("[START] EmployeeServiceImpl.findDistinctDesignations");
+        long start = System.currentTimeMillis();
+        List<String> designations = employeeRepository.findDistinctDesignations();
+        log.info("[END] EmployeeServiceImpl.findDistinctDesignations - returned: {} in {}ms", designations.size(), System.currentTimeMillis() - start);
+        return designations;
     }
 
 @Override
     public Page<EmployeeResponseDto> getEmployeeSearch(int page, int size, String search) {
+        log.info("[START] EmployeeServiceImpl.getEmployeeSearch - page: {}, size: {}, search: {}", page, size, search);
+        long start = System.currentTimeMillis();
         Pageable pageable = PageRequest.of(page, size);
 
         Page<Employee> employees;
@@ -172,7 +219,9 @@ public class EmployeeServiceImpl implements EmployeeService {
                     searchEmployees(search.toLowerCase(), pageable);
         }
 
-        return employees.map(this::mapToDto);
+        Page<EmployeeResponseDto> response = employees.map(this::mapToDto);
+        log.info("[END] EmployeeServiceImpl.getEmployeeSearch - returned count: {} in {}ms", response.getNumberOfElements(), System.currentTimeMillis() - start);
+        return response;
     }
 
 
@@ -212,20 +261,22 @@ public class EmployeeServiceImpl implements EmployeeService {
     public BulkDeleteResponse bulkDeleteEmployees(
             List<Long> employeeIds
     ) {
+        log.info("[START] EmployeeServiceImpl.bulkDeleteEmployees - IDs count: {}", employeeIds != null ? employeeIds.size() : 0);
+        long start = System.currentTimeMillis();
 
         List<Employee> employees =
                 employeeRepository.findAllById(employeeIds);
 
         if (employees.size() != employeeIds.size()) {
-
+            log.warn("bulkDeleteEmployees failed - one or more employee IDs not found");
             throw new ResourceNotFoundException(
                     "One or more employee IDs not found"
             );
         }
 
         employeeRepository.deleteAll(employees);
-
-        return BulkDeleteResponse.builder()
+        employeeIds.forEach(id -> employeeEventPublisher.publishEmployeeEvent(id, "DELETE"));
+        BulkDeleteResponse response = BulkDeleteResponse.builder()
                 .deletedCount(employees.size())
                 .deletedIds(employeeIds)
                 .message(
@@ -233,6 +284,8 @@ public class EmployeeServiceImpl implements EmployeeService {
                                 + " employees deleted successfully"
                 )
                 .build();
+        log.info("[END] EmployeeServiceImpl.bulkDeleteEmployees - deleted: {} in {}ms", response.getDeletedCount(), System.currentTimeMillis() - start);
+        return response;
     }
 
 
@@ -242,6 +295,8 @@ public class EmployeeServiceImpl implements EmployeeService {
     public List<EmployeeResponseDto> bulkCreateEmployees(
             List<EmployeeRequestDto> employeeDtos
     ) {
+        log.info("[START] EmployeeServiceImpl.bulkCreateEmployees - dtos count: {}", employeeDtos != null ? employeeDtos.size() : 0);
+        long start = System.currentTimeMillis();
 
         validateBulkRequest(employeeDtos);
 
@@ -259,15 +314,18 @@ public class EmployeeServiceImpl implements EmployeeService {
 
             Department department = departmentMap.get(dto.getDepartmentId());
             if (department == null) {
+                log.warn("bulkCreateEmployees failed - department not found for ID: {}", dto.getDepartmentId());
                 throw new ResourceNotFoundException(
                         "Department not found for id: " + dto.getDepartmentId()
                 );
             }
 
+            long id = System.nanoTime() + new Random().nextInt(100000);
             String employeeCode =
                     generateEmployeeCode();
 
             Employee employee = Employee.builder()
+                    .id(id)
                     .employeeCode(employeeCode)
                     .firstName(dto.getFirstName())
                     .lastName(dto.getLastName())
@@ -285,11 +343,13 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         List<Employee> savedEmployees =
                 employeeRepository.saveAll(employees);
-
-        return savedEmployees
+        savedEmployees.forEach(emp -> employeeEventPublisher.publishEmployeeEvent(emp.getId(), "CREATE"));
+        List<EmployeeResponseDto> resList = savedEmployees
                 .stream()
                 .map(this::mapToDto)
                 .toList();
+        log.info("[END] EmployeeServiceImpl.bulkCreateEmployees - created: {} in {}ms", resList.size(), System.currentTimeMillis() - start);
+        return resList;
     }
 
 
@@ -413,11 +473,15 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         return code;
     }
+    @Override
     @Transactional
     public List<EmployeeResponseDto> bulkUpdateEmployees(
             List<EmployeeBulkUpdateDto> requests) {
+        log.info("[START] EmployeeServiceImpl.bulkUpdateEmployees - count: {}", requests != null ? requests.size() : 0);
+        long start = System.currentTimeMillis();
 
         if (requests == null || requests.isEmpty()) {
+            log.warn("bulkUpdateEmployees failed - request list is empty");
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Employee list cannot be empty");
@@ -511,7 +575,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         }
 
         if (!validationErrors.isEmpty()) {
-
+            log.warn("bulkUpdateEmployees failed - validation errors: {}", String.join("; ", validationErrors));
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     String.join("; ", validationErrors));
@@ -531,10 +595,14 @@ public class EmployeeServiceImpl implements EmployeeService {
             existing.setDepartment(department);
         }
 
-        return employeeRepository.saveAll(employees)
+        List<Employee> savedEmployees = employeeRepository.saveAll(employees);
+        savedEmployees.forEach(emp -> employeeEventPublisher.publishEmployeeEvent(emp.getId(), "UPDATE"));
+        List<EmployeeResponseDto> resList = savedEmployees
                 .stream()
                 .map(this::mapToDto)
                 .toList();
+        log.info("[END] EmployeeServiceImpl.bulkUpdateEmployees - updated: {} in {}ms", resList.size(), System.currentTimeMillis() - start);
+        return resList;
     }
 
 

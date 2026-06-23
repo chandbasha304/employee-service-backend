@@ -3,6 +3,7 @@ package com.example.ems.repository;
 import com.example.ems.entity.Employee;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,6 +15,14 @@ import java.util.Optional;
 
 @Repository
 public interface EmployeeRepository extends JpaRepository<Employee, Long> {
+
+    @Override
+    @EntityGraph(attributePaths = {"department"})
+    Page<Employee> findAll(Pageable pageable);
+
+    @Override
+    @EntityGraph(attributePaths = {"department"})
+    List<Employee> findAllById(Iterable<Long> ids);
 
     // Find employee by email
     Optional<Employee> findByEmail(String email);
@@ -49,6 +58,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
 
 
+    @EntityGraph(attributePaths = {"department"})
     @Query("SELECT e FROM Employee e " +
             "WHERE LOWER(e.firstName) LIKE %:search% " +
             "   OR LOWER(e.lastName) LIKE %:search% " +

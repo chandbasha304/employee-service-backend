@@ -13,6 +13,7 @@ import com.example.ems.service.JwtService;
 import jakarta.servlet.http.HttpServletRequest;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -28,6 +29,7 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthServiceImpl implements AuthService {
 
     private final AuthenticationManager
@@ -42,6 +44,8 @@ public class AuthServiceImpl implements AuthService {
     public LoginResponse login(
             AuthRequest request
     ) {
+        log.info("[START] AuthServiceImpl.login - email: {}", request.getEmail());
+        long start = System.currentTimeMillis();
         String currentUserAgent = "";
         try {
             org.springframework.web.context.request.ServletRequestAttributes attributes =
@@ -85,6 +89,7 @@ public class AuthServiceImpl implements AuthService {
                 session.setIsActive(false);
                 sessionRepository.save(session);
             } else {
+                log.warn("login failed - active session already exists for: {}", request.getEmail());
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "Session already active. Please logout first."
                 );
@@ -101,7 +106,7 @@ public class AuthServiceImpl implements AuthService {
         String token =
                 jwtService.generateToken(
                         request.getEmail()
-                );
+                    );
 
         String dbToken = token + "|" + currentUserAgent;
 
@@ -122,6 +127,7 @@ public class AuthServiceImpl implements AuthService {
 
         sessionRepository.save(session);
 
+        log.info("[END] AuthServiceImpl.login - email: {} logged in successfully in {}ms", request.getEmail(), System.currentTimeMillis() - start);
         return new LoginResponse(token);
     }
 
@@ -129,13 +135,15 @@ public class AuthServiceImpl implements AuthService {
     public Object logout(
             HttpServletRequest request
     ) {
+        log.info("[START] AuthServiceImpl.logout");
+        long start = System.currentTimeMillis();
 
         final String authHeader =
                 request.getHeader("Authorization");
 
         if (authHeader == null
                 || !authHeader.startsWith("Bearer ")) {
-
+            log.warn("logout failed - authorization token missing");
             throw new RuntimeException(
                     "Authorization token missing"
             );
@@ -150,16 +158,17 @@ public class AuthServiceImpl implements AuthService {
                         .findByTokenAndIsActiveTrue(
                                 token
                         )
-                        .orElseThrow(() ->
-
-                                new RuntimeException(
+                        .orElseThrow(() -> {
+                                log.warn("logout failed - session not found for token");
+                                return new RuntimeException(
                                         "Session not found"
-                                )
-                        );
+                                );
+                        });
 
         session.setIsActive(false);
 
         sessionRepository.save(session);
+        log.info("[END] AuthServiceImpl.logout - email: {} logged out in {}ms", session.getEmail(), System.currentTimeMillis() - start);
         return session;
     }
 }
