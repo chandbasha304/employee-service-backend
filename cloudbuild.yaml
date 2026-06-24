@@ -2,7 +2,8 @@ steps:
   # =========================================================================
   # 1. BUILD & DOCKERIZE CORE EMPLOYEE BACKEND (This Repository)
   # =========================================================================
-  - name: 'gcr.io/cloud-builders/mvn'
+  - name: 'maven:3.9.6-eclipse-temurin-21'
+    entrypoint: 'mvn'
     args: ['clean', 'package', '-DskipTests']
     dir: 'ems'
 
@@ -21,7 +22,8 @@ steps:
   - name: 'gcr.io/cloud-builders/git'
     args: ['clone', 'https://github.com/chandbasha304/department-service.git']
 
-  - name: 'gcr.io/cloud-builders/mvn'
+  - name: 'maven:3.9.6-eclipse-temurin-21'
+    entrypoint: 'mvn'
     args: ['clean', 'package', '-DskipTests']
     dir: 'department-service'
 
