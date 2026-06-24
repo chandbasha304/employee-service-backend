@@ -1,83 +1,29 @@
 steps:
-  # =========================================================================
-  # 1. BUILD & DOCKERIZE CORE EMPLOYEE BACKEND (This Repository)
-  # =========================================================================
+  # 1. Build and package the Spring Boot JAR
   - name: 'maven:3.9.6-eclipse-temurin-21'
     entrypoint: 'mvn'
     args: ['clean', 'package', '-DskipTests']
     dir: 'ems'
 
+  # 2. Build Docker Image
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:$SHORT_SHA'
       - '-t'
       - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:latest'
       - '-f'
       - 'ems/Dockerfile'
       - 'ems'
 
-  # =========================================================================
-  # 2. CLONE, BUILD & DOCKERIZE DEPARTMENT SERVICE
-  # =========================================================================
-  - name: 'gcr.io/cloud-builders/git'
-    args: ['clone', 'https://github.com/chandbasha304/department-service.git']
-
-  - name: 'maven:3.9.6-eclipse-temurin-21'
-    entrypoint: 'mvn'
-    args: ['clean', 'package', '-DskipTests']
-    dir: 'department-service'
-
+  # 3. Push Docker Images to Google Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - 'build'
-      - '-t'
-      - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/department-backend:latest'
-      - '.'
-    dir: 'department-service'
-
-  # =========================================================================
-  # 3. CLONE & DOCKERIZE ANGULAR UI (employee-service)
-  # =========================================================================
-  - name: 'gcr.io/cloud-builders/git'
-    args: ['clone', 'https://github.com/chandbasha304/employee-service.git']
-
-  - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - 'build'
-      - '-t'
-      - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-frontend:latest'
-      - '.'
-    dir: 'employee-service'
-
-  # =========================================================================
-  # 4. CLONE & DOCKERIZE REACT ANALYTICS UI (react-analytics)
-  # =========================================================================
-  - name: 'gcr.io/cloud-builders/git'
-    args: ['clone', 'https://github.com/chandbasha304/react-analytics.git']
-
-  - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - 'build'
-      - '-t'
-      - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-analytics:latest'
-      - '.'
-    dir: 'react-analytics'
-
-  # =========================================================================
-  # 5. PUSH ALL IMAGES TO ARTIFACT REGISTRY
-  # =========================================================================
+    args: ['push', 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:$SHORT_SHA']
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:latest']
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/department-backend:latest']
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-frontend:latest']
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-analytics:latest']
 
-  # =========================================================================
-  # 6. TRIGGER REMOTE SSH DEPLOYMENT ON VM
-  # =========================================================================
+  # 4. Trigger Remote SSH Deployment on VM
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'bash'
     args:
@@ -88,10 +34,8 @@ steps:
           --command="cd ~/ems-deployment && docker-compose pull && docker-compose down && docker-compose up -d"
 
 images:
+  - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:$SHORT_SHA'
   - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:latest'
-  - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/department-backend:latest'
-  - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-frontend:latest'
-  - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-analytics:latest'
 
 options:
   logging: CLOUD_LOGGING_ONLY
