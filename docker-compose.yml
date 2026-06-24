@@ -1,21 +1,58 @@
+version: '3.8'
+
 services:
-
-  ems-app:
-    build: .
-
+  # 1. Core Employee backend
+  ems-backend:
+    image: us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:latest
     container_name: ems-backend
-
     ports:
       - "8080:8080"
-
-    environment:
-      APPLICATION_NAME: ${APPLICATION_NAME}
+    environment: &env
+      APPLICATION_NAME: "ems-backend"
       DATABASE_URL: ${DATABASE_URL}
-      USER_NAME: ${USER_NAME}
-      PASSWORD: ${PASSWORD}
-      DRIVER_CLASS: ${DRIVER_CLASS}
-      AUTO_DDL: ${AUTO_DDL}
-      SHOW_SQL: ${SHOW_SQL}
-      DB_PLATFORM: ${DB_PLATFORM}
+      SPANNER_PROJECT_ID: ${SPANNER_PROJECT_ID}
+      SPANNER_INSTANCE_ID: ${SPANNER_INSTANCE_ID}
+      SPANNER_DATABASE: ${SPANNER_DATABASE}
       SECRET: ${SECRET}
       EXPIRATION: ${EXPIRATION}
+      PORT: "8080"
+      SERVICE_NAME: "/employee-service"
+    networks:
+      - ems-network
+
+  # 2. Department backend
+  department-backend:
+    image: us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/department-backend:latest
+    container_name: department-backend
+    ports:
+      - "8081:8080"
+    environment:
+      <<: *env
+      APPLICATION_NAME: "department-backend"
+      PORT: "8080"
+      SERVICE_NAME: "/"
+    networks:
+      - ems-network
+
+  # 3. Angular UI
+  ems-frontend:
+    image: us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-frontend:latest
+    container_name: ems-frontend
+    ports:
+      - "3000:80"
+    networks:
+      - ems-network
+
+  # 4. React Analytics UI
+  ems-analytics:
+    image: us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-analytics:latest
+    container_name: ems-analytics
+    ports:
+      - "3001:80"
+    networks:
+      - ems-network
+
+networks:
+  ems-network:
+    name: ems-network
+    external: false
