@@ -31,7 +31,9 @@ steps:
       - |
         gcloud compute ssh bashasoft304@ems-backend-vm \
           --zone=us-central1-a \
-          --command="cd ~/ems-deployment && docker-compose pull && docker-compose down && docker-compose up -d"
+          --quiet \
+          --ssh-flag="-o StrictHostKeyChecking=no" \
+          --command="cd /home/bashasoft304/ems-deployment && docker-compose pull && docker-compose down && docker-compose up -d"
 
 images:
   - 'us-central1-docker.pkg.dev/prefab-lamp-498812-u8/ems-repo/ems-backend:$SHORT_SHA'
